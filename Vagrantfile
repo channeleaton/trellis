@@ -78,8 +78,6 @@ Vagrant.configure('2') do |config|
     wordpress_sites.each_pair do |name, site|
       config.vm.synced_folder local_site_path(site), remote_site_path(name, site), owner: 'vagrant', group: 'www-data', mount_options: ['dmode=776', 'fmode=775']
     end
-    config.vm.synced_folder ANSIBLE_PATH, ANSIBLE_PATH_ON_VM, mount_options: ['dmode=755', 'fmode=644']
-    config.vm.synced_folder File.join(ANSIBLE_PATH, 'bin'), bin_path, mount_options: ['dmode=755', 'fmode=755']
   else
     if !Vagrant.has_plugin? 'vagrant-bindfs'
       fail_with_message "vagrant-bindfs missing, please install the plugin with this command:\nvagrant plugin install vagrant-bindfs"
@@ -94,8 +92,12 @@ Vagrant.configure('2') do |config|
     end
   end
 
-  provisioner = Vagrant::Util::Platform.windows? ? :ansible_local : :ansible
-  provisioning_path = Vagrant::Util::Platform.windows? ? ANSIBLE_PATH_ON_VM : ANSIBLE_PATH
+  config.vm.synced_folder ANSIBLE_PATH, ANSIBLE_PATH_ON_VM, mount_options: ['dmode=755', 'fmode=644']
+  config.vm.synced_folder File.join(ANSIBLE_PATH, 'bin'), bin_path, mount_options: ['dmode=755', 'fmode=755']
+
+  provisioner = local_provisioning? ? :ansible_local : :ansible
+  provisioning_path = local_provisioning? ? ANSIBLE_PATH_ON_VM : ANSIBLE_PATH
+
   config.vm.provision provisioner do |ansible|
     if Vagrant::Util::Platform.windows?
       ansible.install_mode = 'pip'
@@ -155,6 +157,10 @@ Vagrant.configure('2') do |config|
 
 end
 
+def local_provisioning?
+  Vagrant::Util::Platform.windows? || !which('ansible-playbook') || ENV['FORCE_ANSIBLE_LOCAL']
+end
+
 def local_site_path(site)
   File.expand_path(site['local_path'], ANSIBLE_PATH)
 end
@@ -179,4 +185,17 @@ end
 
 def remote_site_path(site_name, site)
   "/srv/www/#{site_name}/#{site['current_path'] || 'current'}"
+end
+
+def which(cmd)
+  exts = ENV['PATHEXT'] ? ENV['PATHEXT'].split(';') : ['']
+
+  ENV['PATH'].split(File::PATH_SEPARATOR).each do |path|
+    exts.each do |ext|
+      exe = File.join(path, "#{cmd}#{ext}")
+      return exe if File.executable?(exe) && !File.directory?(exe)
+    end
+  end
+
+  nil
 end
