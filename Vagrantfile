@@ -89,15 +89,15 @@ Vagrant.configure('2') do |config|
         config.vm.synced_folder local_site_path(site), nfs_path(name), type: 'nfs'
         config.bindfs.bind_folder nfs_path(name), remote_site_path(name, site), u: 'vagrant', g: 'www-data', o: 'nonempty'
       end
+
+      config.vm.synced_folder ANSIBLE_PATH, '/ansible-nfs', type: 'nfs'
+      config.bindfs.bind_folder '/ansible-nfs', ANSIBLE_PATH_ON_VM, o: 'nonempty', p: '0644,a+D'
+      config.bindfs.bind_folder bin_path, bin_path, perms: '0755'
     end
   end
 
   provisioner = local_provisioning? ? :ansible_local : :ansible
-  provisioning_path = if local_provisioning?
-    Vagrant::Util::Platform.windows? ? ANSIBLE_PATH_ON_VM : '/vagrant'
-  else
-    ANSIBLE_PATH
-  end
+  provisioning_path = local_provisioning? ? ANSIBLE_PATH_ON_VM : ANSIBLE_PATH
 
   config.vm.provision provisioner do |ansible|
     if local_provisioning?
