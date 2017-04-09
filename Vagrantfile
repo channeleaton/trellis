@@ -78,6 +78,9 @@ Vagrant.configure('2') do |config|
     wordpress_sites.each_pair do |name, site|
       config.vm.synced_folder local_site_path(site), remote_site_path(name, site), owner: 'vagrant', group: 'www-data', mount_options: ['dmode=776', 'fmode=775']
     end
+
+    config.vm.synced_folder ANSIBLE_PATH, ANSIBLE_PATH_ON_VM, mount_options: ['dmode=755', 'fmode=644']
+    config.vm.synced_folder File.join(ANSIBLE_PATH, 'bin'), bin_path, mount_options: ['dmode=755', 'fmode=755']
   else
     if !Vagrant.has_plugin? 'vagrant-bindfs'
       fail_with_message "vagrant-bindfs missing, please install the plugin with this command:\nvagrant plugin install vagrant-bindfs"
@@ -86,29 +89,25 @@ Vagrant.configure('2') do |config|
         config.vm.synced_folder local_site_path(site), nfs_path(name), type: 'nfs'
         config.bindfs.bind_folder nfs_path(name), remote_site_path(name, site), u: 'vagrant', g: 'www-data', o: 'nonempty'
       end
+
       config.vm.synced_folder ANSIBLE_PATH, '/ansible-nfs', type: 'nfs'
       config.bindfs.bind_folder '/ansible-nfs', ANSIBLE_PATH_ON_VM, o: 'nonempty', p: '0644,a+D'
       config.bindfs.bind_folder bin_path, bin_path, perms: '0755'
     end
   end
 
-  config.vm.synced_folder ANSIBLE_PATH, ANSIBLE_PATH_ON_VM, mount_options: ['dmode=755', 'fmode=644']
-  config.vm.synced_folder File.join(ANSIBLE_PATH, 'bin'), bin_path, mount_options: ['dmode=755', 'fmode=755']
-
   provisioner = local_provisioning? ? :ansible_local : :ansible
   provisioning_path = local_provisioning? ? ANSIBLE_PATH_ON_VM : ANSIBLE_PATH
 
   config.vm.provision provisioner do |ansible|
-    if Vagrant::Util::Platform.windows?
+    if local_provisioning?
       ansible.install_mode = 'pip'
       ansible.provisioning_path = provisioning_path
       ansible.version = '2.2.0'
     end
 
     ansible.playbook = File.join(provisioning_path, 'dev.yml')
-    unless ENV['SKIP_GALAXY']
-      ansible.galaxy_role_file = File.join(provisioning_path, 'requirements.yml')
-    end
+    ansible.galaxy_role_file = File.join(provisioning_path, 'requirements.yml') unless ENV['SKIP_GALAXY']
     ansible.galaxy_roles_path = File.join(provisioning_path, 'vendor/roles')
 
     ansible.groups = {
@@ -116,9 +115,7 @@ Vagrant.configure('2') do |config|
       'development' => ['default']
     }
 
-    if tags = ENV['ANSIBLE_TAGS']
-      ansible.tags = tags
-    end
+    ansible.tags = tags if ENV['ANSIBLE_TAGS']
 
     ansible.extra_vars = {'vagrant_version' => Vagrant::VERSION}
     if vars = ENV['ANSIBLE_VARS']
