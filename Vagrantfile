@@ -103,7 +103,7 @@ Vagrant.configure('2') do |config|
     if local_provisioning?
       ansible.install_mode = 'pip'
       ansible.provisioning_path = provisioning_path
-      ansible.version = '2.2.0'
+      ansible.version = '2.2.2'
     end
 
     ansible.playbook = File.join(provisioning_path, 'dev.yml')
